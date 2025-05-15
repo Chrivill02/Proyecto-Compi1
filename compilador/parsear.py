@@ -218,17 +218,103 @@ class Parser:
             
     
     def ciclo_while(self):
-        pass
+        self.coincidir("KEYWORD")
+        self.coincidir("DELIMITER")
+        condicion = self.expresion()
+        self.coincidir("DELIMITER")
+        
+        cuerpo = []
+        if self.obtener_token_actual() and self.obtener_token_actual()[1] == "{":
+            self.coincidir("DELIMITER")
+            cuerpo = self.cuerpo()
+            self.coincidir("DELIMITER")
+        else:
+            cuerpo.append(self.instruccion_unica())
+        
+        return NodoWhile(condicion, cuerpo)
     
     def ciclo_for(self):
-        pass
+        self.coincidir("KEYWORD")
+        self.coincidir("DELIMITER")
+        
+        if self.obtener_token_actual()[0] == "KEYWORD":
+            inicializacion = self.asignacion()
+        else:
+            nombre_token = self.coincidir("IDENTIFIER")
+            nombre = nombre_token[1]
+            self.coincidir("OPERATOR")
+            expresion = self.expresion()
+            self.coincidir("DELIMITER")
+            incializacion = NodoAsignacion(None, nombre, expresion)
+            
+        condicion = self.expresion()
+        self.coincidir("DELIMITER")
+        
+        incremento = self.incremento()
+        self.coincidir("DELIMITER")
+        
+        cuerpo = []
+        if self.obtener_token_actual() and self.obtener_token_actual()[1] == "{":
+            self.coincidir("DELIMITER")
+            cuerpo = self.cuerpo()
+            self.coincidir("DELIMITER")
+        else:
+            cuerpo.append(self.instruccion_unica())
+            
+        return NodoFor(inicializacion, condicion, incremento, cuerpo)
     
     def condicional_if(self):
-        pass
+        self.coincidir("KEYWORD")
+        self.coincidir("DELIMITER")
+        condicion = self.expresion()
+        self.coincidir("DELIMITER")
+        
+        cuerpo = []
+        if self.obtener_token_actual() and self.obtener_token_actual()[1] == "{":
+            self.coincidir("DELIMITER")
+            cuerpo = self.cuerpo()
+            self.coincidir("DELIMITER")
+        else:
+            cuerpo.append(self.instruccion_unica())
+            
+        cuerpo_else = []
+        if self.obtener_token_actual() and self.obtener_token_actual()[1] == "else":
+            self.coincidir("KEYWORD")
+            if self.obtener_token_actual() and self.obtener_token_actual()[1] == "{":
+                self.coincidir("DELIMITER")
+                cuerpo_else = self.cuerpo()
+                self.coincidir("DELIMITER")
+            else:
+                cuerpo_else.append(self.instruccion_unica())
+                
+        return NodoIf(condicion, cuerpo, cuerpo_else)
     
     def condicional_else(self):
-        pass
+        self.coincidir("KEYWORD")
+        
+        cuerpo = []
+        if self.obtener_token_actual() and self.obtener_token_actual()[1] == "{":
+            self.coincidir("DELIMITER")
+            cuerpo = self.cuerpo()
+            self.coincidir("DELIMITER")
+        else:
+            cuerpo.append(self.instruccion_unica())
+            
+        return NodoElse(cuerpo)
     
     def imprimir(self):
-        pass
+        self.coincidir("KEYWORD")
+        self.coincidir("DELIMITER")
+        
+        token_actual = self.obtener_token_actual()
+        if token_actual[0] == "STRING":
+            token = self.coincidir("STRING")
+            expresion = NodoString(token[1])
+        else:
+            expresion = self.expresion()
+            
+        self.coincidir("DELIMITER")
+        self.coincidir("DELIMITER")
+        
+        return NodoPrint(expresion)
     
