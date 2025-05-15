@@ -8,7 +8,7 @@ token_patron = {
     "OPERATOR": r"(==|!=|<=|>=|&&|\|\||\+\+|--|[+\-*/=<>!&])",
     "STRING": r'"([^"]*)"',
     "DELIMITER": r"[(),;{}]",
-    "WHITESPACE": r"\s+"
+    "WHITESPACE": r"\s+",
 }
 
 def identificar(text):
@@ -19,4 +19,4 @@ def identificar(text):
         for token, valor in match.groupdict().items():
             if valor is not None and token != "WHITESPACE":
                 tokens_encontrados.append((token, valor))
-                
+    return tokens_encontrados

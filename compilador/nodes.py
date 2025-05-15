@@ -11,7 +11,7 @@ class NodoAST:
 class NodoPrograma(NodoAST):
     def __init__(self, funciones):
         self.funciones = funciones
-        
+    
     def to_dict(self):
         return {
             "tipo": "programa",
@@ -105,42 +105,42 @@ class NodoOperacion(NodoAST):
         izquierda = self.izquierda.optimizacion()
         derecha = self.derecha.optimizacion()
         
-        if isinstance(izquierda, self.NodoNumero) and isinstance(derecha, self.NodoNumero):
+        if isinstance(izquierda, NodoNumero) and isinstance(derecha, NodoNumero):
             if self.operador == "+":
-                return self.NodoNumero(float(izquierda.valor) + float(derecha.valor))
+                return NodoNumero(float(izquierda.valor) + float(derecha.valor))
             elif self.operador == "-":
-                return self.NodoNumero(float(izquierda.valor) - float(derecha.valor))
+                return NodoNumero(float(izquierda.valor) - float(derecha.valor))
             elif self.operador == "*":
-                return self.NodoNumero(float(izquierda.valor) * float(derecha.valor))
+                return NodoNumero(float(izquierda.valor) * float(derecha.valor))
             elif self.operador == "/" and float(derecha.valor) != 0:
-                return self.NodoNumero(float(izquierda.valor) / float(derecha.valor))
+                return NodoNumero(float(izquierda.valor) / float(derecha.valor))
             
         # Simplificacion algebraica
-        if self.operador == "*" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 1:
+        if self.operador == "*" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 1:
             return izquierda
-        if self.operador =="*" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 0:
-            return self.NodoNumero(0)
-        if self.operador == "*" and isinstance(izquierda, self.NodoNumero) and float(izquierda.valor) == 1:
+        if self.operador =="*" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 0:
+            return NodoNumero(0)
+        if self.operador == "*" and isinstance(izquierda, NodoNumero) and float(izquierda.valor) == 1:
             return derecha
-        if self.operador == "*" and isinstance(izquierda, self.NodoNumero) and float(izquierda.valor) == 0:
-            return self.NodoNumero(0)
-        if self.operador == "+" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 0:
+        if self.operador == "*" and isinstance(izquierda, NodoNumero) and float(izquierda.valor) == 0:
+            return NodoNumero(0)
+        if self.operador == "+" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 0:
             return izquierda
-        if self.operador == "+" and isinstance(izquierda, self.NodoNumero) and float(izquierda.valor) == 0:
+        if self.operador == "+" and isinstance(izquierda, NodoNumero) and float(izquierda.valor) == 0:
             return derecha
-        if self.operador == "-" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 0:
+        if self.operador == "-" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 0:
             return izquierda
-        if self.operador == "-" and isinstance(izquierda, self.NodoNumero) and float(izquierda.valor) == 0:
-            return self.NodoNumero(0) - derecha
-        if self.operador == "/" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 1:
+        if self.operador == "-" and isinstance(izquierda, NodoNumero) and float(izquierda.valor) == 0:
+            return NodoNumero(0) - derecha
+        if self.operador == "/" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 1:
             return izquierda
-        if self.operador == "/" and isinstance(izquierda, self.NodoNumero) and float(izquierda.valor) == 0:
-            return self.NodoNumero(0)
-        if self.operador == "/" and isinstance(izquierda, self.NodoNumero) and float(izquierda.valor) == 1:
-            return self.NodoNumero(1) / derecha
-        if self.operador == "/" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 1:
+        if self.operador == "/" and isinstance(izquierda, NodoNumero) and float(izquierda.valor) == 0:
+            return NodoNumero(0)
+        if self.operador == "/" and isinstance(izquierda, NodoNumero) and float(izquierda.valor) == 1:
+            return NodoNumero(1) / derecha
+        if self.operador == "/" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 1:
             return izquierda
-        if self.operador == "/" and isinstance(derecha, self.NodoNumero) and float(derecha.valor) == 0:
+        if self.operador == "/" and isinstance(derecha, NodoNumero) and float(derecha.valor) == 0:
             raise ZeroDivisionError("Division por cero")
         
         # Si no se puede optimizar más:
@@ -196,7 +196,7 @@ class NodoString(NodoAST):
         self.valor = valor
         
     def traducir(self):
-        return f'"{self.valor}"'
+        return str(self.valor)
     
     def optimizacion(self):
         return self
@@ -217,9 +217,9 @@ class NodoIf(NodoAST):
         cuerpo = "\n    ".join(c.traducir() for c in self.cuerpo)
         if self.cuerpo_else:
             cuerpo_else = "\n    ".join(c.traducir() for c in self.cuerpo_else)
-            return f"if {self.codicion.traducir()}:\n    {cuerpo}\nelse:\n    {cuerpo_else}"
+            return f"if {self.condicion.traducir()}:\n    {cuerpo}\nelse:\n    {cuerpo_else}"
         else:
-            return f"if {self.codicion.traducir()}:\n    {cuerpo}"
+            return f"if {self.condicion.traducir()}:\n    {cuerpo}"
         
     def optimizacion(self):
         condicion = self.condicion.optimizacion()
@@ -303,7 +303,7 @@ class NodoFor(NodoAST):
     def to_dict(self):
         return {
             "tipo": "for",
-            "incializacion": self.inicializacion.to_dict(),
+            "inicializacion": self.inicializacion.to_dict(),
             "condicion": self.condicion.to_dict(),
             "incremento": self.incremento.to_dict(),
             "cuerpo": [instr.to_dict() for instr in self.cuerpo]
@@ -326,7 +326,7 @@ class NodoPrint(NodoAST):
         self.expresion = expresion
         
     def traducir(self):
-        return f'print("{self.expresion.traducir()}")'
+        return f'print({self.expresion.traducir()})'
 
     def to_dict(self):
         return {
