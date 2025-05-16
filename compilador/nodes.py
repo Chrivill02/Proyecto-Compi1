@@ -93,18 +93,39 @@ class NodoOperacion(NodoAST):
         
     def traducir(self):
         if self.operador == "+":
-            return f"({self.izquierda.traducir()} + {self.derecha.traducir()})"
+            return f"({self.izquierda.traducir()} {self.operador} {self.derecha.traducir()})"
         elif self.operador =="-":
-            return f"({self.izquierda.traducir()} - {self.derecha.traducir()})"
+            return f"({self.izquierda.traducir()} {self.operador} {self.derecha.traducir()})"
         elif self.operador == "*":
-            return f"({self.izquierda.traducir()} * {self.derecha.traducir()})"
+            return f"({self.izquierda.traducir()} {self.operador} {self.derecha.traducir()})"
         elif self.operador == "/":
-            return f"({self.izquierda.traducir()} / {self.derecha.traducir()})"
+            return f"({self.izquierda.traducir()} {self.operador} {self.derecha.traducir()})"
 
     def optimizacion(self):
         izquierda = self.izquierda.optimizacion()
         derecha = self.derecha.optimizacion()
         
+        if isinstance(izquierda, (NodoNumero, NodoFloat)) and isinstance(derecha, (NodoNumero, NodoFloat)):
+            val_izq = float(izquierda.valor)
+            val_der = float(derecha.valor)
+            
+            try:
+                if self.operador == "+":
+                    resultado = val_izq + val_der
+                elif self.operador == "-":
+                    resultado = val_izq - val_der
+                elif self.operador == "*":
+                    resultado = val_izq * val_der
+                elif self.operador == "/":
+                    resultado = val_izq / val_der
+                
+                if isinstance(izquierda, NodoFloat) or isinstance(derecha, NodoFloat) or isinstance(resultado, float):
+                    return NodoFloat(resultado)
+                else:
+                    return NodoNumero(int(resultado))
+            except ZeroDivisionError:
+                raise ZeroDivisionError("División por cero")
+            
         if isinstance(izquierda, NodoNumero) and isinstance(derecha, NodoNumero):
             if self.operador == "+":
                 return NodoNumero(float(izquierda.valor) + float(derecha.valor))
@@ -188,6 +209,22 @@ class NodoNumero(NodoAST):
     def to_dict(self):
         return {
             "tipo": "numero",
+            "valor": self.valor
+        }
+
+class NodoFloat(NodoAST):
+    def __init__(self, valor):
+        self.valor = valor
+        
+    def traducir(self):
+        return str(self.valor)
+    
+    def optimizacion(self):
+        return self
+    
+    def to_dict(self):
+        return{
+            "tipo": "float",
             "valor": self.valor
         }
 
