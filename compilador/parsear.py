@@ -1,4 +1,4 @@
-from nodes import NodoPrograma, NodoFuncion, NodoParametro, NodoLlamadaFuncion, NodoAsignacion, NodoRetorno, NodoOperacion, NodoNumero, NodoIdentificador, NodoIncremento, NodoFor, NodoWhile, NodoIf, NodoElse, NodoString, NodoPrint
+from nodes import *
 
 
 class Parser:
