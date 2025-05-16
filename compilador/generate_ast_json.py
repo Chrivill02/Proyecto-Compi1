@@ -1,4 +1,4 @@
-from nodes import NodoPrograma, NodoFuncion, NodoParametro, NodoAsignacion, NodoOperacion, NodoRetorno, NodoIdentificador, NodoNumero, NodoString, NodoIf, NodoWhile, NodoFor, NodoIncremento, NodoPrint, NodoElse, NodoLlamadaFuncion
+from nodes import *
 import json
 
 
