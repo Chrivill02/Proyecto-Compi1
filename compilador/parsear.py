@@ -189,7 +189,14 @@ class Parser:
         operador_token = self.coincidir("OPERATOR")
         operador = operador_token[1]
         
-        return NodoIncremento(nombre, operador)
+        if operador == "++":
+            expresion = NodoOperacion(NodoIdentificador(nombre), '+', NodoNumero(1))
+        elif operador == "--":
+            expresion = NodoOperacion(NodoIdentificador(nombre), '-', NodoNumero(1))
+        else:
+            raise SyntaxError(f"Operador de incremento inválido: {operador}")
+        
+        return NodoAsignacion(None, nombre, expresion)
     
     def instruccion_unica(self):
         token_actual = self.obtener_token_actual()
