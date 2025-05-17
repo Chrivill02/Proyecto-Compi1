@@ -6,25 +6,11 @@ from generadorEnsamblador import GeneradorEnsamblador
 
 # Ejemplo de uso con múltiples funciones
 texto_prueba = """
-int suma(int a, int b) {
-    return a + b;
-}
-
-int multiplica(int a, int b) {
-    return a * b;
-}
-
 int main() {
-    int resultado = 0;
-    int x = 5;
-    int y = 10;
-    
-    resultado = suma(x, y);
-    print(resultado);
-    
-    resultado = multiplica(x, y);
-    print(resultado);
-    
+    for (int i = 1; i <= 5; i++) {
+        print(i);
+    }
+
     return 0;
 }
 """
