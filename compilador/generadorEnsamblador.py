@@ -48,7 +48,7 @@ class GeneradorEnsamblador:
             self._gen_funcion_epilogo()
             
         elif isinstance(nodo, NodoAsignacion):
-            if nodo.tipo:  # Declaración
+            if nodo.tipo:  
                 self.local_vars[nodo.nombre] = self.stack_offset
                 self.stack_offset += 8
             self.generar(nodo.expresion)
@@ -112,15 +112,14 @@ class GeneradorEnsamblador:
             self.generar(nodo.expresion)
             
             if isinstance(nodo.expresion, NodoString):
-                self.codigo.append("    mov rcx, rax")
-                self.codigo.append("    lea rdx, [fmt_str_s]")
+                self.codigo.append("    mov rdx, rax")         
+                self.codigo.append("    lea rcx, [fmt_str_s]") 
             else:
-                self.codigo.append("    mov rdx, rax")
-                self.codigo.append("    lea rcx, [fmt_str_d]")
-                
-            self.codigo.append("    sub rsp, 40")
+                self.codigo.append("    mov rdx, rax")         
+                self.codigo.append("    lea rcx, [fmt_str_d]") 
+            self.codigo.append("    sub rsp, 32") 
             self.codigo.append("    call printf")
-            self.codigo.append("    add rsp, 40")
+            self.codigo.append("    add rsp, 32")
             
         elif isinstance(nodo, NodoRetorno):
             self.generar(nodo.expresion)
@@ -137,8 +136,9 @@ class GeneradorEnsamblador:
     def _gen_cabecera(self):
         self.data_section = [
             'section .data',
-            'fmt_str_d db "%d", 10, 0',  
-            'fmt_str_s db "%s", 10, 0', 
+            'fmt_str_d db "%d", 0',
+            'fmt_str_s db "%s", 0', 
+            'fmt_newline db 10, 0',
         ]
         
     def _gen_fin(self):
@@ -150,9 +150,11 @@ class GeneradorEnsamblador:
             self.codigo.extend([
                 'global main',
                 'main:',
-                '    call _main_impl', 
+                '    sub rsp, 40',
+                '    call _main_impl',
                 '    xor rcx, rcx',
-                '    call ExitProcess'
+                '    call ExitProcess',
+                '    add rsp, 40'
             ])
             self.entry_point_added = True
         
@@ -161,8 +163,8 @@ class GeneradorEnsamblador:
         
         self.codigo.append(f"global {func_name}")
         self.codigo.append(f"{func_name}:")
-        self.codigo.append("    push rbp")
-        self.codigo.append("    mov rbp, rsp")
+        self.codigo.append("    push rbp") 
+        self.codigo.append("    mov rbp, rsp") 
         
         self.local_vars = {}
         self.stack_offset = 8  # Comenzar desde 8 para evitar [rbp - 0]
@@ -207,7 +209,6 @@ class GeneradorEnsamblador:
             if padding > 0:
                 self.codigo.append(f"    sub rsp, {padding}")
         
-        
         for i, arg in enumerate(args_reversed):
             self.generar(arg)
             if i < 4:
@@ -216,7 +217,6 @@ class GeneradorEnsamblador:
             else:
                 self.codigo.append("    push rax")
         
-        # En Windows x64, se debe reservar espacio (shadow space) para los 4 primeros parámetros
         self.codigo.append("    sub rsp, 32")
         self.codigo.append(f"    call {called_func}")
         
@@ -232,11 +232,43 @@ class GeneradorEnsamblador:
             self.codigo.append(f"    add rsp, {total_to_add}")
         else:
             self.codigo.append("    add rsp, 32")
+    
+    def _gen_comparacion(self, nodo):
+        self.generar(nodo.izquierda)
+        self.codigo.append("    push rax")
+        
+        self.generar(nodo.derecha)
+        self.codigo.append("    mov rbx, rax") 
+        self.codigo.append("    pop rax")
+        self.codigo.append("    cmp rax, rbx")
+        
+        etiq_verdadero = self.nueva_etiqueta()
+        etiq_fin = self.nueva_etiqueta()
+        
+        if nodo.operador == "==":
+            self.codigo.append(f"    je {etiq_verdadero}")
+        elif nodo.operador == "!=":
+            self.codigo.append(f"    jne {etiq_verdadero}")
+        elif nodo.operador == "<":
+            self.codigo.append(f"    jl {etiq_verdadero}")
+        elif nodo.operador == ">":
+            self.codigo.append(f"    jg {etiq_verdadero}")
+        elif nodo.operador == "<=":
+            self.codigo.append(f"    jle {etiq_verdadero}")
+        elif nodo.operador == ">=":
+            self.codigo.append(f"    jge {etiq_verdadero}")
+        
+        self.codigo.append("    mov rax, 0")
+        self.codigo.append(f"    jmp {etiq_fin}")
+        
+        self.codigo.append(f"{etiq_verdadero}:")
+        self.codigo.append("    mov rax, 1")
+        
+        self.codigo.append(f"{etiq_fin}:")
         
     def _gen_condicional(self, nodo):
         else_label = self.nueva_etiqueta()
         fin_label = self.nueva_etiqueta()
-        
         
         self.generar(nodo.condicion)
         
@@ -260,16 +292,16 @@ class GeneradorEnsamblador:
         condicion_label = self.nueva_etiqueta()
         fin_label = self.nueva_etiqueta()
         
-        self.codigo.append(f"    jmp {condicion_label}")
+        self.codigo.append(f"    jmp {condicion_label}") 
         
         self.codigo.append(f"{inicio_label}:")
-        for instr in nodo.cuerpo:
+        for instr in nodo.cuerpo: 
             self.generar(instr)
         
         self.codigo.append(f"{condicion_label}:")
         self.generar(nodo.condicion)
         self.codigo.append("    test rax, rax")
-        self.codigo.append(f"    jnz {inicio_label}")  
+        self.codigo.append(f"    jnz {inicio_label}") 
         
         self.codigo.append(f"{fin_label}:")
         
@@ -278,20 +310,23 @@ class GeneradorEnsamblador:
         condicion_label = self.nueva_etiqueta()
         incremento_label = self.nueva_etiqueta()
         fin_label = self.nueva_etiqueta()
-        
+
         if nodo.inicializacion:
             self.generar(nodo.inicializacion)
-        
+
         self.codigo.append(f"    jmp {condicion_label}")
-        
+
         self.codigo.append(f"{inicio_label}:")
         for instr in nodo.cuerpo:
             self.generar(instr)
-        
+            
         self.codigo.append(f"{incremento_label}:")
         if nodo.incremento:
-            self.generar(nodo.incremento)
-        
+            if isinstance(nodo.incremento, NodoAsignacion):
+                self.generar(nodo.incremento)
+            else:
+                self.generar(nodo.incremento)
+
         self.codigo.append(f"{condicion_label}:")
         if nodo.condicion:
             self.generar(nodo.condicion)
@@ -299,7 +334,7 @@ class GeneradorEnsamblador:
             self.codigo.append(f"    jnz {inicio_label}")
         else:
             self.codigo.append(f"    jmp {inicio_label}")
-        
+
         self.codigo.append(f"{fin_label}:")
         
     def obtener_codigo(self):
