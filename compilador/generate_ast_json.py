@@ -34,14 +34,14 @@ def imprimir_ast(nodo, nivel=0):
     
     elif isinstance(nodo, NodoOperacion):
         print(f"{prefijo}Operacion: {nodo.operador}")
-        print(f"{prefijo} Operando izquierdo:")
+        print(f"{prefijo} Nodo izquierdo:")
         imprimir_ast(nodo.izquierda, nivel + 2)
-        print(f"{prefijo} Operando derecho:")
+        print(f"{prefijo} Nodo derecho:")
         imprimir_ast(nodo.derecha, nivel + 2)
         
     elif isinstance(nodo, NodoRetorno):
         print(f"{prefijo}Retorno:")
-        imprimir_ast(nodo.expreison, nivel + 1)
+        imprimir_ast(nodo.expresion, nivel + 1)
         
     elif isinstance(nodo, NodoIdentificador):
         print(f"{prefijo}Identificador: {nodo.nombre}")
