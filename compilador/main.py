@@ -9,8 +9,8 @@ texto_prueba = """
 int main() {
     for (int i = 1; i <= 5; i++) {
         print(i);
+        print(",");
     }
-
     return 0;
 }
 """
