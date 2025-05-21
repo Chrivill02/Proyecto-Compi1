@@ -292,63 +292,103 @@ class FlowchartEditor(QMainWindow):
         toolbar.addAction(clear_action)
 
     def show_generated_code(self):
-        items = [item for item in self.view.scene.items() if isinstance(item, FlowchartItem)]
-        connections = [item for item in self.view.scene.items() if isinstance(item, Connection)]
+        try:
+            items = [item for item in self.view.scene.items() if isinstance(item, FlowchartItem)]
+            connections = [item for item in self.view.scene.items() if isinstance(item, Connection)]
 
-        graph = {item: [] for item in items}
-        for conn in connections:
-            graph[conn.start_item].append(conn.end_item)
-
-        visited = set()
-        code_lines = []
-
-        def generate_code(node):
-            if node in visited:
-                return
-            visited.add(node)
-            text = node.text.strip()
+            # Construir el grafo de conexiones
+            graph = {}
+            for item in items:
+                graph[item] = []
             
-            if node.shape_type == "start":
-                code_lines.append("int main() {")
-            elif node.shape_type == "end":
-                code_lines.append("    return 0;")
-                code_lines.append("}")
-                return
-            elif node.shape_type == "process":
-                code_lines.append(f"    {text};")
-            elif node.shape_type == "input":
-                code_lines.append(f'    scanf("%s", &{text});')
-            elif node.shape_type == "output":
-                code_lines.append(f'    printf("%s", {text});')
-            elif node.shape_type == "decision":
-                code_lines.append(f"    if ({text}) {{")
-                children = graph.get(node, [])
-                if children:
-                    generate_code(children[0])
-                code_lines.append("    }")
-                if len(children) > 1:
-                    code_lines.append("    else {")
-                    generate_code(children[1])
-                    code_lines.append("    }")
-                return
+            for conn in connections:
+                if conn.start_item in graph and conn.end_item in graph:
+                    graph[conn.start_item].append(conn.end_item)
+
+            visited = set()
+            code_lines = []
             
-            for next_node in graph.get(node, []):
-                generate_code(next_node)
+            # Usamos una lista para mantener el nivel de indentación entre llamadas recursivas
+            indent_data = [0]  # Usamos una lista para poder modificarla en las funciones internas
 
-        start_nodes = [item for item in items if item.shape_type == "start"]
-        if start_nodes:
-            generate_code(start_nodes[0])
-        else:
-            code_lines.append("// No se encontró un nodo inicial (Inicio).")
+            def add_line(text):
+                code_lines.append("    " * indent_data[0] + text)
 
-        code_text = "\n".join(code_lines)
+            def generate_code(node):
+                if node in visited:
+                    return
+                visited.add(node)
+                
+                text = node.text.strip()
+                
+                if node.shape_type == "start":
+                    add_line("int main() {")
+                    indent_data[0] += 1
+                elif node.shape_type == "end":
+                    if indent_data[0] > 0:
+                        indent_data[0] -= 1
+                    add_line("return 0;")
+                    if indent_data[0] > 0:
+                        indent_data[0] -= 1
+                    add_line("}")
+                    return
+                elif node.shape_type == "process":
+                    if text.endswith("++"):
+                        add_line(f"{text};")
+                    else:
+                        add_line(f"{text};")
+                elif node.shape_type == "input":
+                    add_line(f'scanf("%s", &{text});')
+                elif node.shape_type == "output":
+                    add_line(f'printf("{text}");')
+                elif node.shape_type == "decision":
+                    add_line(f"if ({text}) {{")
+                    indent_data[0] += 1
+                    # Procesar la rama verdadera (primera conexión)
+                    if graph.get(node, []) and len(graph[node]) > 0:
+                        generate_code(graph[node][0])
+                    indent_data[0] -= 1
+                    
+                    # Procesar la rama falsa (segunda conexión si existe)
+                    if graph.get(node, []) and len(graph[node]) > 1:
+                        add_line("} else {")
+                        indent_data[0] += 1
+                        generate_code(graph[node][1])
+                        indent_data[0] -= 1
+                    add_line("}")
+                    return
+                
+                # Procesar siguientes nodos
+                for next_node in graph.get(node, []):
+                    generate_code(next_node)
 
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Código C Generado")
-        dlg.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-        dlg.setText(f"<pre>{code_text}</pre>")
-        dlg.setStandardButtons(QMessageBox.Ok)
-        dlg.exec_()
+            # Encontrar el nodo de inicio
+            start_nodes = [item for item in items if item.shape_type == "start"]
+            if start_nodes:
+                generate_code(start_nodes[0])
+            else:
+                add_line("// No se encontró un nodo inicial (Inicio)")
+
+            # Asegurarse de que el código termina correctamente
+            if not any(line.strip().startswith("return") for line in code_lines):
+                if code_lines and code_lines[-1].strip() == "}":
+                    code_lines.insert(-1, "    return 0;")
+                else:
+                    code_lines.append("return 0;")
+                    code_lines.append("}")
+
+            code_text = "\n".join(code_lines)
+
+            # Mostrar el código en un cuadro de diálogo
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Código C Generado")
+            dlg.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+            dlg.setText(f"<pre>{code_text}</pre>")
+            dlg.setStandardButtons(QMessageBox.Ok)
+            dlg.exec_()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Ocurrió un error al generar el código:\n{str(e)}")
 
     def create_side_panel(self):
         dock = QDockWidget("Elementos", self)
@@ -401,8 +441,9 @@ class FlowchartEditor(QMainWindow):
             if isinstance(item, FlowchartItem):
                 item.delete_item()
             elif isinstance(item, Connection):
-                item.start_item.remove_connection(item)
-                item.end_item.remove_connection(item)
+                if hasattr(item, 'start_item') and hasattr(item, 'end_item'):
+                    item.start_item.remove_connection(item)
+                    item.end_item.remove_connection(item)
                 self.view.scene.removeItem(item)
 
     def clear_scene(self):
@@ -425,3 +466,5 @@ if __name__ == "__main__":
     editor = FlowchartEditor()
     editor.show()
     sys.exit(app.exec_())
+
+##
