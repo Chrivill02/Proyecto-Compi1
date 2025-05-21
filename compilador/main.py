@@ -449,7 +449,8 @@ class FlowchartEditor(QMainWindow):
             layout.addLayout(buttons_layout)
             dlg.setLayout(layout)
             dlg.exec_()
-        
+            
+            ######## Aquí comienza la logica de la implementación de el compilador ##########
             # Ejemplo de uso con múltiples funciones
             texto_prueba = codigo_c
 
@@ -481,7 +482,7 @@ class FlowchartEditor(QMainWindow):
             except Exception as e:
                 print("Error en el analisis sintactico:")
                 print(e)
-                
+        ########## Aquí finaliza la logica del compilador #############
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
