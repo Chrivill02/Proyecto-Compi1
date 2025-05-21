@@ -1,11 +1,10 @@
-
 import sys
 from tkinter.filedialog import FileDialog
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QAction, QGraphicsView, QGraphicsScene,
     QGraphicsPathItem, QGraphicsTextItem, QInputDialog, QMenu, QGraphicsLineItem,
     QGraphicsPolygonItem, QDockWidget, QListWidget, QVBoxLayout, QWidget,
-    QLabel, QColorDialog, QMessageBox, QDialog
+    QLabel, QColorDialog, QMessageBox, QDialog, QTextEdit, QPushButton
 )
 from PyQt5.QtCore import Qt, QPointF, QLineF
 from PyQt5.QtGui import (
@@ -71,11 +70,9 @@ class FlowchartItem(QGraphicsPathItem):
         font.setPointSize(10)
         self.text_item.setFont(font)
         
-        # Connect signals to update text property when text changes
         self.text_item.document().contentsChanged.connect(self.update_text_from_item)
 
     def update_text_from_item(self):
-        # Update the text property when the QGraphicsTextItem content changes
         self.text = self.text_item.toPlainText()
         self.center_text()
 
@@ -83,7 +80,7 @@ class FlowchartItem(QGraphicsPathItem):
         text_width = self.text_item.boundingRect().width()
         text_height = self.text_item.boundingRect().height()
         
-        if self.shape_type == "decision":
+        if self.shape_type in ["decision", "loop"]:
             center_x = (self.width - text_width) / 2
             center_y = (self.height - text_height) / 2 - 5
         else:
@@ -114,6 +111,16 @@ class FlowchartItem(QGraphicsPathItem):
             path.lineTo(self.width/4, self.height)
             path.lineTo(0, self.height/2)
             path.closeSubpath()
+        elif self.shape_type == "loop":
+            polygon = QPolygonF([
+                QPointF(self.width/4, 0),
+                QPointF(3*self.width/4, 0),
+                QPointF(self.width, self.height/2),
+                QPointF(3*self.width/4, self.height),
+                QPointF(self.width/4, self.height),
+                QPointF(0, self.height/2)
+            ])
+            path.addPolygon(polygon)
         self.setPath(path)
 
     def add_connection(self, connection):
@@ -169,7 +176,6 @@ class FlowchartItem(QGraphicsPathItem):
         self.scene().removeItem(self)
         
     def get_raw_text(self):
-        """Get the raw text content without any HTML interpretation"""
         return self.text
 
 class FlowchartView(QGraphicsView):
@@ -277,6 +283,7 @@ class FlowchartEditor(QMainWindow):
             ("Inicio (N)", "start", "N"),
             ("Proceso (P)", "process", "P"),
             ("Decisión (D)", "decision", "D"),
+            ("Ciclo (L)", "loop", "L"),
             ("Fin (F)", "end", "F"),
             ("Entrada/Salida (I)", "input", "I"),
         ]
@@ -328,6 +335,48 @@ class FlowchartEditor(QMainWindow):
                 if conn.start_item in graph and conn.end_item in graph:
                     graph[conn.start_item].append(conn.end_item)
 
+            # Validar estructura básica del grafo
+            start_nodes = [item for item in items if item.shape_type == "start"]
+            end_nodes = [item for item in items if item.shape_type == "end"]
+            
+            if not start_nodes:
+                QMessageBox.warning(self, "Advertencia", "No se encontró un nodo de inicio (Inicio)")
+                return
+                
+            if len(start_nodes) > 1:
+                QMessageBox.warning(self, "Advertencia", "Hay múltiples nodos de inicio (Inicio)")
+                return
+                
+            if not end_nodes:
+                QMessageBox.warning(self, "Advertencia", "No se encontró un nodo de fin (Fin)")
+
+            # Verificar ciclos infinitos
+            def has_cycle(node, visited, recursion_stack):
+                visited.add(node)
+                recursion_stack.add(node)
+                
+                for neighbor in graph.get(node, []):
+                    if neighbor not in visited:
+                        if has_cycle(neighbor, visited, recursion_stack):
+                            return True
+                    elif neighbor in recursion_stack:
+                        return True
+                        
+                recursion_stack.remove(node)
+                return False
+                
+            visited = set()
+            has_cycle_flag = False
+            for node in graph:
+                if node not in visited:
+                    if has_cycle(node, set(), set()):
+                        has_cycle_flag = True
+                        break
+                        
+            if has_cycle_flag:
+                QMessageBox.warning(self, "Advertencia", 
+                    "Se detectó un posible ciclo infinito en el diagrama. Verifique las conexiones.")
+
             visited = set()
             code_lines = []
             indent_level = 0
@@ -341,13 +390,11 @@ class FlowchartEditor(QMainWindow):
                     return
                 visited.add(node)
                 
-                # Get the raw text content directly from the text_item
                 raw_text = node.text_item.toPlainText().strip()
                 
                 if node.shape_type == "start":
                     add_line("int main() {")
                     indent_level += 1
-                    # Procesar siguiente nodo
                     for next_node in graph.get(node, []):
                         generate_code(next_node)
                     indent_level -= 1
@@ -359,38 +406,31 @@ class FlowchartEditor(QMainWindow):
                     return
                     
                 elif node.shape_type == "process":
-                    # Verificar si es una asignación simple
                     if "=" in raw_text or raw_text.endswith(";"):
                         add_line(raw_text if raw_text.endswith(";") else f"{raw_text};")
                     else:
                         add_line(f"{raw_text};")
                         
                 elif node.shape_type == "input":
-                    # Determinar el tipo de entrada basado en el texto
                     if " " in raw_text:
                         var_name, var_type = raw_text.split(" ", 1)
                         if var_type.lower() in ["int", "entero"]:
                             add_line(f'scanf("%d", &{var_name});')
                         elif var_type.lower() in ["float", "flotante"]:
                             add_line(f'scanf("%f", &{var_name});')
-                        else:  # Por defecto string
+                        else:
                             add_line(f'scanf("%s", {var_name});')
                     else:
                         add_line(f'scanf("%s", &{raw_text});')
                         
                 elif node.shape_type == "decision":
-                    # Remove question marks but preserve all other characters
                     condition = raw_text.replace("?", "").strip()
-                    # Print the condition for debugging
-                    print(f"Decision condition: '{condition}'")
                     add_line(f"if ({condition}) {{")
                     indent_level += 1
-                    # Procesar rama verdadera (primera conexión)
                     if graph.get(node, []) and len(graph[node]) > 0:
                         generate_code(graph[node][0])
                     indent_level -= 1
                     
-                    # Procesar rama falsa (segunda conexión si existe)
                     if graph.get(node, []) and len(graph[node]) > 1:
                         add_line("} else {")
                         indent_level += 1
@@ -399,12 +439,41 @@ class FlowchartEditor(QMainWindow):
                     add_line("}")
                     return
                     
-                # Procesar siguientes nodos (para nodos que no son decisiones)
+                elif node.shape_type == "loop":
+                    if "for" in raw_text.lower() or "desde" in raw_text.lower():
+                        if "desde" in raw_text.lower():
+                            parts = raw_text.split()
+                            if len(parts) >= 5 and parts[0].lower() == "desde" and "hasta" in raw_text.lower():
+                                var_part = parts[1]
+                                hasta_index = raw_text.lower().index("hasta")
+                                start_value = var_part.split('=')[1] if '=' in var_part else "0"
+                                var_name = var_part.split('=')[0]
+                                end_value = raw_text[hasta_index+6:].split()[0]
+                                
+                                if "paso" in raw_text.lower():
+                                    paso_index = raw_text.lower().index("paso")
+                                    step_value = raw_text[paso_index+5:].split()[0]
+                                else:
+                                    step_value = "1"
+                                
+                                add_line(f"for({var_name}={start_value}; {var_name}<={end_value}; {var_name}+={step_value}) {{")
+                        else:
+                            add_line(f"{raw_text} {{")
+                    else:
+                        condition = raw_text.replace("?", "").strip()
+                        add_line(f"while ({condition}) {{")
+                    
+                    indent_level += 1
+                    if graph.get(node, []) and len(graph[node]) > 0:
+                        generate_code(graph[node][0])
+                    indent_level -= 1
+                    add_line("}")
+                    return
+                    
                 for next_node in graph.get(node, []):
                     generate_code(next_node)
 
-            # Encontrar el nodo de inicio
-            start_nodes = [item for item in items if item.shape_type == "start"]
+            # Generar código desde el nodo de inicio
             if start_nodes:
                 generate_code(start_nodes[0])
             else:
@@ -414,13 +483,9 @@ class FlowchartEditor(QMainWindow):
                 add_line("    return 0;")
                 add_line("}")
 
-            # Generate the code text
             code_text = "\n".join(code_lines)
             global codigo_c
             codigo_c = code_text
-            
-            # Create a custom dialog with a plain text editor
-            from PyQt5.QtWidgets import QDialog, QTextEdit, QVBoxLayout, QPushButton, QFileDialog
             
             dlg = QDialog(self)
             dlg.setWindowTitle("Código C Generado")
@@ -428,7 +493,7 @@ class FlowchartEditor(QMainWindow):
             
             layout = QVBoxLayout()
             text_edit = QTextEdit()
-            text_edit.setPlainText(code_text)  # Use plain text to avoid HTML interpretation
+            text_edit.setPlainText(code_text)
             text_edit.setReadOnly(True)
             layout.addWidget(text_edit)
             
@@ -450,30 +515,28 @@ class FlowchartEditor(QMainWindow):
             dlg.setLayout(layout)
             dlg.exec_()
             
-            ######## Aquí comienza la logica de la implementación de el compilador ##########
-            # Ejemplo de uso con múltiples funciones
+            ######## Lógica del compilador ##########
             texto_prueba = codigo_c
 
-            # Analisis lexico
             tokens = analisis_lexico.identificar(texto_prueba)
             print("tokens encontrados:")
             for i in tokens:
                 print(i)
             print("\n")
 
-            # Analisis sintactico y contruccion del AST
             try:
                 parser = Parser(tokens)
                 ast = parser.parsear()
                 print("Analisis sintactico exitoso")
-                # Imprimir el AST (cuando este completo) en esta linea
+                
                 analizador = AnalizadorSemantico()
                 analizador.analizar(ast)
                 print("Analisis semantico exitoso")
-                # Mostrar tabla de simbolos (variable y funciones) en esta linea
+                
                 json_ast = generate_ast_json.ast_a_json(ast)
                 print("\n========= AST en formato JSON =========")
                 print(json_ast)
+                
                 generador = GeneradorEnsamblador()
                 generador.generar(ast)
                 with open('salida.asm', 'w') as f:
@@ -482,16 +545,14 @@ class FlowchartEditor(QMainWindow):
             except Exception as e:
                 print("Error en el analisis sintactico:")
                 print(e)
-        ########## Aquí finaliza la logica del compilador #############
+        
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"Ocurrió un error al generar el código:\n{str(e)}\n\nDetalles:\n{tb}")
 
     def save_code_to_file(self, code_text):
-        """Save the generated code to a file"""
-        filename, _ = QDialog.getSaveFileName(self, "Guardar Código C", "", "Archivos C (*.c);;Todos los archivos (*)")
+        filename, _ = QFileDialog.getSaveFileName(self, "Guardar Código C", "", "Archivos C (*.c);;Todos los archivos (*)")
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
@@ -538,6 +599,7 @@ class FlowchartEditor(QMainWindow):
             "end": "Fin",
             "process": "Procesar",
             "decision": "¿Condición?",
+            "loop": "for(i=0; i<10; i++)",
             "input": "variable tipo"
         }
         item = FlowchartItem(100, 100, 120, 70, shape_type, default_texts.get(shape_type, shape_type.capitalize()))
