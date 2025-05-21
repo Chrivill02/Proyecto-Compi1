@@ -132,6 +132,9 @@ class GeneradorEnsamblador:
             
         elif isinstance(nodo, NodoFor):
             self._gen_ciclo_for(nodo)
+            
+        elif isinstance(nodo, NodoScanf):
+            self._gen_scanf(nodo)
     
     def _gen_cabecera(self):
         self.data_section = [
@@ -139,6 +142,8 @@ class GeneradorEnsamblador:
             'fmt_str_d db "%d", 0',
             'fmt_str_s db "%s", 0', 
             'fmt_newline db 10, 0',
+            'fmt_scanf_int db "%d", 0',
+            'fmt_scanf_str db "%s", 0'
         ]
         
     def _gen_fin(self):
@@ -286,7 +291,40 @@ class GeneradorEnsamblador:
             self.generar(instr)
         
         self.codigo.append(f"{fin_label}:")
+    
+    def _gen_scanf(self, nodo):
+        # Añadir el formato de scanf a la sección de datos si no existe ya
+        formato = nodo.formato
+        # Quitar comillas si existen
+        if formato.startswith('"') and formato.endswith('"'):
+            formato = formato[1:-1]
         
+        # Generar un ID único para el formato de scanf
+        fmt_id = f"scanf_fmt_{self.string_counter}"
+        self.string_literals[fmt_id] = formato
+        self.string_counter += 1
+        
+        # Procesar cada variable
+        for i, var in enumerate(nodo.variables):
+            if i > 0:
+                self.codigo.append("    push rax")  # Guardar resultados anteriores
+            
+            # Obtener el offset de la variable en la pila
+            var_nombre = var.nombre
+            if var_nombre in self.local_vars:
+                var_offset = self.local_vars[var_nombre]
+                
+                # Cálculo de la dirección de la variable
+                self.codigo.append(f"    lea rdx, [rbp - {var_offset}]")  # Dirección de la variable
+                self.codigo.append(f"    lea rcx, [{fmt_id}]")  # Formato
+                self.codigo.append("    sub rsp, 32")  # Shadow space
+                self.codigo.append("    call scanf")
+                self.codigo.append("    add rsp, 32")  # Restaurar stack
+            else:
+                # Si la variable no existe, generar un error en tiempo de ejecución
+                # o manejar de otra forma apropiada
+                self.codigo.append(f"    ; Error: Variable {var_nombre} no declarada")
+    
     def _gen_ciclo_while(self, nodo):
         inicio_label = self.nueva_etiqueta()
         condicion_label = self.nueva_etiqueta()
@@ -340,9 +378,17 @@ class GeneradorEnsamblador:
     def obtener_codigo(self):
         extern_section = [
             'section .text',
+            'default rel',
             'extern printf',
-            'extern ExitProcess',
-            'default rel'
+            'extern scanf',
+            'extern ExitProcess'
         ]
-        return '\n'.join(self.data_section + [''] + extern_section + [''] + self.codigo)
+    
+        return '\n'.join(
+            self.data_section + 
+            [''] + 
+            extern_section + 
+            [''] + 
+            self.codigo
+        )
     

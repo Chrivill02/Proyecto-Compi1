@@ -244,6 +244,37 @@ class NodoString(NodoAST):
             "valor": self.valor
         }
 
+class NodoScanf(NodoAST):
+    def __init__(self, formato, variables):
+        self.formato = formato
+        self.variables = variables 
+
+    def to_dict(self):
+        return {
+            "tipo": "scanf",
+            "formato": self.formato,
+            "variables": [var.to_dict() for var in self.variables]
+        }
+
+    def traducir(self):
+        vars_str = ", ".join(["&" + var.traducir() for var in self.variables])
+        return f'scanf("{self.formato}", {vars_str})'
+
+class NodoOperacionUnaria(NodoAST):
+    def __init__(self, operador, operando):
+        self.operador = operador
+        self.operando = operando
+
+    def to_dict(self):
+        return {
+            "tipo": "operacion_unaria",
+            "operador": self.operador,
+            "operando": self.operando.to_dict()
+        }
+
+    def traducir(self):
+        return f"{self.operador}{self.operando.traducir()}"
+    
 class NodoIf(NodoAST):
     def __init__(self, condicion, cuerpo, cuerpo_else=None):
         self.condicion = condicion
