@@ -1,4 +1,5 @@
 
+import platform
 import sys
 from tkinter.filedialog import FileDialog
 from PyQt5.QtWidgets import (
@@ -17,6 +18,8 @@ import analisis_lexico
 import generate_ast_json
 from analisis_semantico import AnalizadorSemantico
 from generadorEnsamblador import GeneradorEnsamblador
+import subprocess
+import os
 
 global codigo_c
 codigo_c = "" 
@@ -46,7 +49,7 @@ class FlowchartItem(QGraphicsPathItem):
     def __init__(self, x, y, width, height, shape_type="process", text=""):
         super().__init__()
         self.shape_type = shape_type
-        self.text = text
+        self._text = text  # Propiedad texto privada
         self.width = width
         self.height = height
         self.connections = []
@@ -63,7 +66,9 @@ class FlowchartItem(QGraphicsPathItem):
         self.create_shape()
         self.setPos(x, y)
 
-        self.text_item = QGraphicsTextItem(text, self)
+        # Crear el elemento de texto gráfico
+        self.text_item = QGraphicsTextItem(self)
+        self.text_item.setPlainText(text)  # Establecer el texto inicial
         self.center_text()
         self.text_item.setTextInteractionFlags(Qt.TextEditorInteraction)
         self.text_item.setDefaultTextColor(Qt.black)
@@ -71,12 +76,26 @@ class FlowchartItem(QGraphicsPathItem):
         font.setPointSize(10)
         self.text_item.setFont(font)
         
-        # Connect signals to update text property when text changes
+        # Conectar señal para actualizar el texto interno cuando cambia el editor
         self.text_item.document().contentsChanged.connect(self.update_text_from_item)
 
+    @property
+    def text(self):
+        # Asegurarnos de obtener siempre el texto actualizado del item gráfico
+        return self.text_item.toPlainText()
+    
+    @text.setter
+    def text(self, value):
+        # Cuando se establece la propiedad, actualizamos también el item gráfico
+        self._text = value
+        if self.text_item.toPlainText() != value:
+            self.text_item.setPlainText(value)
+        self.center_text()
+    
     def update_text_from_item(self):
-        # Update the text property when the QGraphicsTextItem content changes
-        self.text = self.text_item.toPlainText()
+        # Actualizar la propiedad interna cuando el texto gráfico cambia
+        self._text = self.text_item.toPlainText()
+        print(f"Texto actualizado a: '{self._text}'")  # Para depuración
         self.center_text()
 
     def center_text(self):
@@ -132,11 +151,12 @@ class FlowchartItem(QGraphicsPathItem):
         return super().itemChange(change, value)
 
     def mouseDoubleClickEvent(self, event):
-        new_text, ok = QInputDialog.getText(None, 'Editar texto', 'Nuevo texto:', text=self.text)
+        current_text = self.text_item.toPlainText()
+        new_text, ok = QInputDialog.getText(None, 'Editar texto', 'Nuevo texto:', text=current_text)
         if ok:
-            self.text = new_text
+            # Actualizar directamente el texto gráfico, esto disparará update_text_from_item
             self.text_item.setPlainText(new_text)
-            self.center_text()
+            print(f"Texto establecido a: '{new_text}' por doble clic")
 
     def contextMenuEvent(self, event):
         menu = QMenu()
@@ -341,8 +361,9 @@ class FlowchartEditor(QMainWindow):
                     return
                 visited.add(node)
                 
-                # Get the raw text content directly from the text_item
+                # Obtener siempre el texto directamente del componente gráfico
                 raw_text = node.text_item.toPlainText().strip()
+                print(f"Generando código para nodo: '{raw_text}'")
                 
                 if node.shape_type == "start":
                     add_line("int main() {")
@@ -359,11 +380,11 @@ class FlowchartEditor(QMainWindow):
                     return
                     
                 elif node.shape_type == "process":
-                    # Verificar si es una asignación simple
-                    if "=" in raw_text or raw_text.endswith(";"):
-                        add_line(raw_text if raw_text.endswith(";") else f"{raw_text};")
-                    else:
-                        add_line(f"{raw_text};")
+                    # Procesar el texto tal cual (manteniendo signos y espacios)
+                    processed_text = raw_text
+                    if not processed_text.endswith(";"):
+                        processed_text += ";"
+                    add_line(processed_text)
                         
                 elif node.shape_type == "input":
                     # Determinar el tipo de entrada basado en el texto
@@ -379,9 +400,8 @@ class FlowchartEditor(QMainWindow):
                         add_line(f'scanf("%s", &{raw_text});')
                         
                 elif node.shape_type == "decision":
-                    # Remove question marks but preserve all other characters
+                    # Mantener el texto tal cual, solo quitar signos de interrogación
                     condition = raw_text.replace("?", "").strip()
-                    # Print the condition for debugging
                     print(f"Decision condition: '{condition}'")
                     add_line(f"if ({condition}) {{")
                     indent_level += 1
@@ -452,6 +472,7 @@ class FlowchartEditor(QMainWindow):
             
             ######## Aquí comienza la logica de la implementación de el compilador ##########
             # Ejemplo de uso con múltiples funciones
+            texto_prueba = ""
             texto_prueba = codigo_c
 
             # Analisis lexico
@@ -474,14 +495,16 @@ class FlowchartEditor(QMainWindow):
                 json_ast = generate_ast_json.ast_a_json(ast)
                 print("\n========= AST en formato JSON =========")
                 print(json_ast)
-                generador = GeneradorEnsamblador()
-                generador.generar(ast)
-                with open('salida.asm', 'w') as f:
-                    f.write(generador.obtener_codigo())
-                
+                try:
+                    self.compilar(ast)
+                    self.execute_code()
+                except:
+                    print("Error al compilar o ejecutar el codigo")
+                    
             except Exception as e:
                 print("Error en el analisis sintactico:")
                 print(e)
+
         ########## Aquí finaliza la logica del compilador #############
         except Exception as e:
             import traceback
@@ -489,6 +512,64 @@ class FlowchartEditor(QMainWindow):
             from PyQt5.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"Ocurrió un error al generar el código:\n{str(e)}\n\nDetalles:\n{tb}")
 
+    def execute_code(self):
+        try:
+            if platform.system() == "Windows":
+                subprocess.Popen(f'start cmd /k "salida.exe"', shell=True)
+            else:
+                print("Este método está diseñado para ejecutarse en Windows.")
+                return False
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Error al ejecutar: {e}")
+            return False
+    
+    def compilar(self, ast, archivo_salida ="salida"):
+        extensiones = [".asm", ".exe", ".obj"]
+        for ext in extensiones:
+            ruta = f"{archivo_salida}{ext}"
+            if os.path.exists(ruta):
+                try:
+                    os.remove(ruta)
+                    print(f"Archivo eliminado: {ruta}")
+                except Exception as e:
+                    print(f"No se pudo eliminar {ruta}: {e}")
+            else:
+                print(f"No existe archivo: {ruta}")
+            
+        generador = GeneradorEnsamblador()
+        generador.generar(ast)
+        with open('salida.asm', 'w') as f:
+            f.write(generador.obtener_codigo())
+            print(f"Archivo {archivo_salida}.asm generado correctamente")
+        try:
+            print("Ensamblado con NASM...")
+            try:
+                subprocess.run(["nasm", "-f", "win64", f"{archivo_salida}.asm", "-o", f"{archivo_salida}.obj"], check=True, capture_output=True, text=True)
+                print("Ensamblado completo")
+            except subprocess.CalledProcessError as e:
+                print("Error al ejecutar NASM: ")
+                print("STDOUT:", e.stdout)
+                print("STDERR:", e.stderr)
+                return False
+            
+            subprocess.run(["gcc", f"{archivo_salida}.obj", "-o", f"{archivo_salida}.exe"])
+            print("Enlazado completo")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Error durante la compilación (código {e.returncode}): {e}")
+            if e.stdout:
+                print("Salida estándar:", e.stdout.decode())
+            if e.stderr:
+                print("Error estándar:", e.stderr.decode())
+            return False
+        except FileNotFoundError:
+            print("Error: NASM o link.exe no están instalados o no están en el PATH")
+            print("Asegúrate de que:")
+            print("1. NASM esté instalado y en el PATH")
+            print("2. Visual Studio o las herramientas de compilación de C++ estén instaladas")
+            return False
+    
     def save_code_to_file(self, code_text):
         """Save the generated code to a file"""
         filename, _ = QDialog.getSaveFileName(self, "Guardar Código C", "", "Archivos C (*.c);;Todos los archivos (*)")
