@@ -1,12 +1,13 @@
 
+import json
 import platform
 import sys
-from tkinter.filedialog import FileDialog
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QToolBar, QAction, QGraphicsView, QGraphicsScene,
+    QApplication, QMainWindow, QAction, QGraphicsView, QGraphicsScene,
     QGraphicsPathItem, QGraphicsTextItem, QInputDialog, QMenu, QGraphicsLineItem,
-    QGraphicsPolygonItem, QDockWidget, QListWidget, QVBoxLayout, QWidget,
-    QLabel, QColorDialog, QMessageBox, QDialog
+    QDockWidget, QListWidget, QVBoxLayout, QWidget, QLabel, 
+    QColorDialog, QMessageBox, QDialog, QFileDialog, QTextEdit, QPushButton
+            
 )
 from PyQt5.QtCore import Qt, QPointF, QLineF
 from PyQt5.QtGui import (
@@ -76,24 +77,21 @@ class FlowchartItem(QGraphicsPathItem):
         font.setPointSize(10)
         self.text_item.setFont(font)
         
-        # Conectar señal para actualizar el texto interno cuando cambia el editor
+        # Señal para actualizar el texto interno cuando cambia el editor
         self.text_item.document().contentsChanged.connect(self.update_text_from_item)
 
     @property
     def text(self):
-        # Asegurarnos de obtener siempre el texto actualizado del item gráfico
         return self.text_item.toPlainText()
     
     @text.setter
     def text(self, value):
-        # Cuando se establece la propiedad, actualizamos también el item gráfico
         self._text = value
         if self.text_item.toPlainText() != value:
             self.text_item.setPlainText(value)
         self.center_text()
     
     def update_text_from_item(self):
-        # Actualizar la propiedad interna cuando el texto gráfico cambia
         self._text = self.text_item.toPlainText()
         print(f"Texto actualizado a: '{self._text}'")  # Para depuración
         self.center_text()
@@ -154,9 +152,9 @@ class FlowchartItem(QGraphicsPathItem):
         current_text = self.text_item.toPlainText()
         new_text, ok = QInputDialog.getText(None, 'Editar texto', 'Nuevo texto:', text=current_text)
         if ok:
-            # Actualizar directamente el texto gráfico, esto disparará update_text_from_item
+            # Actualizar texto grafico
             self.text_item.setPlainText(new_text)
-            print(f"Texto establecido a: '{new_text}' por doble clic")
+            print(f"Texto establecido a: '{new_text}' por doble clic")  # Depuracion
 
     def contextMenuEvent(self, event):
         menu = QMenu()
@@ -334,6 +332,14 @@ class FlowchartEditor(QMainWindow):
         clear_action.triggered.connect(self.clear_scene)
         toolbar.addAction(clear_action)
 
+        save_json_action = QAction("Guardar JSON", self)
+        save_json_action.triggered.connect(self.save_ast_json)
+        toolbar.addAction(save_json_action)
+
+        load_json_action = QAction("Abrir JSON", self)
+        load_json_action.triggered.connect(self.load_diagram_from_json)
+        toolbar.addAction(load_json_action)
+        
     def generate_c_code(self):
         try:
             items = [item for item in self.view.scene.items() if isinstance(item, FlowchartItem)]
@@ -361,7 +367,7 @@ class FlowchartEditor(QMainWindow):
                     return
                 visited.add(node)
                 
-                # Obtener siempre el texto directamente del componente gráfico
+                # Obtener texto
                 raw_text = node.text_item.toPlainText().strip()
                 print(f"Generando código para nodo: '{raw_text}'")
                 
@@ -380,7 +386,6 @@ class FlowchartEditor(QMainWindow):
                     return
                     
                 elif node.shape_type == "process":
-                    # Procesar el texto tal cual (manteniendo signos y espacios)
                     processed_text = raw_text
                     if not processed_text.endswith(";"):
                         processed_text += ";"
@@ -400,7 +405,6 @@ class FlowchartEditor(QMainWindow):
                         add_line(f'scanf("%s", &{raw_text});')
                         
                 elif node.shape_type == "decision":
-                    # Mantener el texto tal cual, solo quitar signos de interrogación
                     condition = raw_text.replace("?", "").strip()
                     print(f"Decision condition: '{condition}'")
                     add_line(f"if ({condition}) {{")
@@ -434,21 +438,19 @@ class FlowchartEditor(QMainWindow):
                 add_line("    return 0;")
                 add_line("}")
 
-            # Generate the code text
+            # Generador de codigo
             code_text = "\n".join(code_lines)
             global codigo_c
             codigo_c = code_text
             
-            # Create a custom dialog with a plain text editor
-            from PyQt5.QtWidgets import QDialog, QTextEdit, QVBoxLayout, QPushButton, QFileDialog
-            
+        
             dlg = QDialog(self)
             dlg.setWindowTitle("Código C Generado")
             dlg.setMinimumSize(600, 400)
             
             layout = QVBoxLayout()
             text_edit = QTextEdit()
-            text_edit.setPlainText(code_text)  # Use plain text to avoid HTML interpretation
+            text_edit.setPlainText(code_text)  # Plain para interpretar HTML
             text_edit.setReadOnly(True)
             layout.addWidget(text_edit)
             
@@ -462,7 +464,7 @@ class FlowchartEditor(QMainWindow):
             btn_save.clicked.connect(lambda: self.save_code_to_file(code_text))
             buttons_layout.addWidget(btn_save)
             
-            btn_close = QPushButton("Cerrar")
+            btn_close = QPushButton("Ejecutar")
             btn_close.clicked.connect(dlg.accept)
             buttons_layout.addWidget(btn_close)
             
@@ -471,7 +473,6 @@ class FlowchartEditor(QMainWindow):
             dlg.exec_()
             
             ######## Aquí comienza la logica de la implementación de el compilador ##########
-            # Ejemplo de uso con múltiples funciones
             texto_prueba = ""
             texto_prueba = codigo_c
 
@@ -495,6 +496,17 @@ class FlowchartEditor(QMainWindow):
                 json_ast = generate_ast_json.ast_a_json(ast)
                 print("\n========= AST en formato JSON =========")
                 print(json_ast)
+                btn_save_ast = QPushButton("Guardar AST")
+                btn_save_ast.clicked.connect(lambda: self.save_ast_file(json_ast))
+                buttons_layout.addWidget(btn_save_ast)
+                
+                def save_ast_file(self, ast_json):
+                    filename, _ = QFileDialog.getSaveFileName(
+                        self, "Guardar AST", "", "JSON Files (*.json)"
+                    )
+                    if filename:
+                        with open(filename, 'w') as f:
+                            f.write(ast_json)
                 try:
                     self.compilar(ast)
                     self.execute_code()
@@ -570,8 +582,77 @@ class FlowchartEditor(QMainWindow):
             print("2. Visual Studio o las herramientas de compilación de C++ estén instaladas")
             return False
     
+    def save_ast_json(self):
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Guardar Diagrama", "", "JSON Files (*.json)"
+        )
+        if filename:
+            data = {
+                "nodes": [],
+                "connections": []
+            }
+            
+            # Guardar nodos
+            items = [item for item in self.view.scene.items() 
+                    if isinstance(item, FlowchartItem)]
+            for item in items:
+                data["nodes"].append({
+                    "type": item.shape_type,
+                    "x": item.x(),
+                    "y": item.y(),
+                    "text": item.text,
+                    "color": item.brush().color().name(),
+                    "width": item.width,
+                    "height": item.height
+                })
+            
+            # Guardar conexiones
+            connections = [conn for conn in self.view.scene.items() 
+                        if isinstance(conn, Connection)]
+            for conn in connections:
+                data["connections"].append({
+                    "start": items.index(conn.start_item),
+                    "end": items.index(conn.end_item)
+                })
+                
+            with open(filename, 'w') as f:
+                json.dump(data, f, indent=4)
+
+    def load_diagram_from_json(self):
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Abrir Diagrama", "", "JSON Files (*.json)"
+        )
+        if filename:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            
+        self.view.scene.clear()
+        
+        # Cargar nodos
+        items = []
+        for node in data["nodes"]:
+            item = FlowchartItem(
+                node["x"],
+                node["y"],
+                node["width"],
+                node["height"],
+                node["type"],
+                node["text"]
+            )
+            item.setBrush(QColor(node["color"]))
+            self.view.scene.addItem(item)
+            items.append(item)
+
+        # Cargar conexiones
+        for conn in data["connections"]:
+            start = items[conn["start"]]
+            end = items[conn["end"]]
+            connection = Connection(start, end)
+            self.view.scene.addItem(connection)
+            start.add_connection(connection)
+            end.add_connection(connection)
+            
     def save_code_to_file(self, code_text):
-        """Save the generated code to a file"""
         filename, _ = QDialog.getSaveFileName(self, "Guardar Código C", "", "Archivos C (*.c);;Todos los archivos (*)")
         if filename:
             try:
