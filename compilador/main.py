@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QAction, QGraphicsView, QGraphicsScene,
     QGraphicsPathItem, QGraphicsTextItem, QInputDialog, QMenu, QGraphicsLineItem,
     QGraphicsPolygonItem, QDockWidget, QListWidget, QVBoxLayout, QWidget,
-    QLabel, QColorDialog, QMessageBox
+    QLabel, QColorDialog, QMessageBox, QDialog
 )
 from PyQt5.QtCore import Qt, QPointF, QLineF
 from PyQt5.QtGui import (
@@ -490,7 +490,7 @@ class FlowchartEditor(QMainWindow):
 
     def save_code_to_file(self, code_text):
         """Save the generated code to a file"""
-        filename, _ = FileDialog.getSaveFileName(self, "Guardar Código C", "", "Archivos C (*.c);;Todos los archivos (*)")
+        filename, _ = QDialog.getSaveFileName(self, "Guardar Código C", "", "Archivos C (*.c);;Todos los archivos (*)")
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
