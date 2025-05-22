@@ -104,7 +104,19 @@ class Parser:
                     self.coincidir("DELIMITER", ";")
                     instrucciones.append(NodoAsignacion(None, nombre, expresion))
             elif self.obtener_token_actual()[0] == "KEYWORD":
-                instrucciones.append(self.asignacion())
+                tipo_token = self.coincidir("KEYWORD")
+                tipo = tipo_token[1]
+                nombre_token = self.coincidir("IDENTIFIER")
+                nombre = nombre_token[1]
+                
+                if self.obtener_token_actual() and self.obtener_token_actual()[1] == "=":
+                    self.coincidir("OPERATOR", "=")
+                    expresion = self.expresion()
+                    self.coincidir("DELIMITER", ";")
+                    instrucciones.append(NodoAsignacion(tipo, nombre, expresion))
+                else:
+                    self.coincidir("DELIMITER", ";")
+                    instrucciones.append(NodoAsignacion(tipo, nombre, NodoNumero(0)))  # Valor por defecto
             else:
                 raise SyntaxError(f"Error sintactico: instruccion inesperada {self.obtener_token_actual()}")
 

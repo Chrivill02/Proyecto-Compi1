@@ -168,35 +168,41 @@ class GeneradorEnsamblador:
         
         self.codigo.append(f"global {func_name}")
         self.codigo.append(f"{func_name}:")
-        self.codigo.append("    push rbp") 
-        self.codigo.append("    mov rbp, rsp") 
+        self.codigo.append("    push rbp")
+        self.codigo.append("    mov rbp, rsp")
         
         self.local_vars = {}
-        self.stack_offset = 8  # Comenzar desde 8 para evitar [rbp - 0]
+        param_offset = 8  # Offset para parámetros (empezando desde [rbp+16])
         
         for i, param in enumerate(funcion.parametros):
             if i < 4:
-                self.local_vars[param.nombre] = self.stack_offset
-                self.stack_offset += 8
+                self.local_vars[param.nombre] = param_offset
+                param_offset += 8
             else:
-                self.local_vars[param.nombre] = self.stack_offset
-                self.stack_offset += 8
+                self.local_vars[param.nombre] = 16 + (i-4)*8  # [rbp+16], [rbp+24], etc.
         
-        if self.stack_offset < 16:
-            stack_space = 16
-        else:
-            stack_space = ((self.stack_offset + 15) // 16) * 16
+        variables_locales = []
+        for instr in funcion.cuerpo:
+            if isinstance(instr, NodoAsignacion) and instr.tipo:
+                variables_locales.append(instr)
         
-        self.codigo.append(f"    sub rsp, {stack_space}")
+        local_var_offset = 8
+        for var in variables_locales:
+            self.local_vars[var.nombre] = local_var_offset
+            local_var_offset += 8
+        
+        total_space = ((local_var_offset - 1 + 15) // 16 * 16)
+        self.codigo.append(f"    sub rsp, {total_space}")
         
         for i, param in enumerate(funcion.parametros):
             if i < 4:
                 reg = ['rcx', 'rdx', 'r8', 'r9'][i]
                 self.codigo.append(f"    mov [rbp - {self.local_vars[param.nombre]}], {reg}")
-            else:
-                offset = 16 + (i-4)*8  
-                self.codigo.append(f"    mov rax, [rbp + {offset}]")
-                self.codigo.append(f"    mov [rbp - {self.local_vars[param.nombre]}], rax")
+        
+        for instr in funcion.cuerpo:
+            if isinstance(instr, NodoAsignacion) and instr.tipo:
+                self.generar(instr.expresion)
+                self.codigo.append(f"    mov [rbp - {self.local_vars[instr.nombre]}], rax")
             
     def _gen_funcion_epilogo(self):
         self.codigo.append("    mov rsp, rbp")
