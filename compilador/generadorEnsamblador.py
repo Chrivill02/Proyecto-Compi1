@@ -299,37 +299,25 @@ class GeneradorEnsamblador:
         self.codigo.append(f"{fin_label}:")
     
     def _gen_scanf(self, nodo):
-        # Añadir el formato de scanf a la sección de datos si no existe ya
-        formato = nodo.formato
-        # Quitar comillas si existen
-        if formato.startswith('"') and formato.endswith('"'):
-            formato = formato[1:-1]
-        
-        # Generar un ID único para el formato de scanf
+        formato = nodo.formato.strip('"')
         fmt_id = f"scanf_fmt_{self.string_counter}"
         self.string_literals[fmt_id] = formato
         self.string_counter += 1
         
-        # Procesar cada variable
-        for i, var in enumerate(nodo.variables):
-            if i > 0:
-                self.codigo.append("    push rax")  # Guardar resultados anteriores
-            
-            # Obtener el offset de la variable en la pila
-            var_nombre = var.nombre
-            if var_nombre in self.local_vars:
-                var_offset = self.local_vars[var_nombre]
+        for var in nodo.variables:
+            var_name = var.nombre
+            if var_name not in self.local_vars:
+                self.local_vars[var_name] = self.stack_offset
+                self.stack_offset += 8
                 
-                # Cálculo de la dirección de la variable
-                self.codigo.append(f"    lea rdx, [rbp - {var_offset}]")  # Dirección de la variable
-                self.codigo.append(f"    lea rcx, [{fmt_id}]")  # Formato
-                self.codigo.append("    sub rsp, 32")  # Shadow space
-                self.codigo.append("    call scanf")
-                self.codigo.append("    add rsp, 32")  # Restaurar stack
-            else:
-                # Si la variable no existe, generar un error en tiempo de ejecución
-                # o manejar de otra forma apropiada
-                self.codigo.append(f"    ; Error: Variable {var_nombre} no declarada")
+            var_offset = self.local_vars[var_name]
+            self.codigo.extend([
+                f"    lea rdx, [rbp - {var_offset}]",
+                f"    lea rcx, [{fmt_id}]",
+                "    sub rsp, 32",
+                "    call scanf",
+                "    add rsp, 32"
+            ])
     
     def _gen_ciclo_while(self, nodo):
         inicio_label = self.nueva_etiqueta()
