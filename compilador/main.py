@@ -392,17 +392,8 @@ class FlowchartEditor(QMainWindow):
                     add_line(processed_text)
                         
                 elif node.shape_type == "input":
-                    # Determinar el tipo de entrada basado en el texto
-                    if " " in raw_text:
-                        var_name, var_type = raw_text.split(" ", 1)
-                        if var_type.lower() in ["int", "entero"]:
-                            add_line(f'scanf("%d", &{var_name});')
-                        elif var_type.lower() in ["float", "flotante"]:
-                            add_line(f'scanf("%f", &{var_name});')
-                        else:  # Por defecto string
-                            add_line(f'scanf("%s", {var_name});')
-                    else:
-                        add_line(f'scanf("%s", &{raw_text});')
+                    var_name = raw_text.split(" ")[0]
+                    add_line(f'scanf("%d", &{var_name});')
                         
                 elif node.shape_type == "decision":
                     condition = raw_text.replace("?", "").strip()
