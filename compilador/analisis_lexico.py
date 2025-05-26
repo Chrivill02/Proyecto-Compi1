@@ -2,7 +2,7 @@ import re
 
 # Analisis Lexico
 token_patron = {
-    "KEYWORD": r"\b(if|else|while|return|int|float|void|for|print)\b",
+    "KEYWORD": r"\b(if|else|while|return|int|float|void|for|print|scanf)\b",
     "IDENTIFIER": r"\b[a-zA-Z_][a-zA-Z0-9_]*\b",
     "NUMBER": r"\b\d+(\.\d+)?\b",
     "OPERATOR": r"(==|!=|<=|>=|&&|\|\||\+\+|--|[+\-*/=<>!&])",

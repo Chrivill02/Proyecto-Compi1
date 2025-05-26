@@ -85,6 +85,9 @@ class Parser:
                 instrucciones.append(self.ciclo_for())
             elif self.obtener_token_actual()[1] == "print":
                 instrucciones.append(self.imprimir())
+            elif self.obtener_token_actual()[1] == "scanf":
+                instrucciones.append(self.leer_entrada())
+                self.coincidir("DELIMITER", ";")
             elif self.obtener_token_actual()[0] == "IDENTIFIER":
                 siguiente = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
                 if siguiente and siguiente[1] == "(":
@@ -101,12 +104,39 @@ class Parser:
                     self.coincidir("DELIMITER", ";")
                     instrucciones.append(NodoAsignacion(None, nombre, expresion))
             elif self.obtener_token_actual()[0] == "KEYWORD":
-                instrucciones.append(self.asignacion())
+                tipo_token = self.coincidir("KEYWORD")
+                tipo = tipo_token[1]
+                nombre_token = self.coincidir("IDENTIFIER")
+                nombre = nombre_token[1]
+                
+                if self.obtener_token_actual() and self.obtener_token_actual()[1] == "=":
+                    self.coincidir("OPERATOR", "=")
+                    expresion = self.expresion()
+                    self.coincidir("DELIMITER", ";")
+                    instrucciones.append(NodoAsignacion(tipo, nombre, expresion))
+                else:
+                    self.coincidir("DELIMITER", ";")
+                    instrucciones.append(NodoAsignacion(tipo, nombre, NodoNumero(0)))  # Valor por defecto
             else:
                 raise SyntaxError(f"Error sintactico: instruccion inesperada {self.obtener_token_actual()}")
 
         return instrucciones
-                    
+    
+    def leer_entrada(self):
+        self.coincidir("KEYWORD", "scanf")
+        self.coincidir("DELIMITER", "(")
+        formato = self.coincidir("STRING")[1] 
+        self.coincidir("DELIMITER", ",")
+        variables = []
+        while self.obtener_token_actual()[1] != ")":
+            self.coincidir("OPERATOR", "&")
+            var_name = self.coincidir("IDENTIFIER")[1]
+            variables.append(NodoIdentificador(var_name))
+            if self.obtener_token_actual()[1] == ",":
+                self.coincidir("DELIMITER", ",")
+        self.coincidir("DELIMITER", ")")
+        return NodoScanf(formato, variables)
+    
     def llamada_funcion(self):
         nombre_token = self.coincidir("IDENTIFIER")
         nombre = nombre_token[1]
@@ -164,6 +194,11 @@ class Parser:
         
     def factor(self):
         token_actual = self.obtener_token_actual()
+        
+        if token_actual[0] == "OPERATOR" and token_actual[1] in ('&', '*', '-', '+'):
+            operador = self.coincidir("OPERATOR")[1]
+            operando = self.factor()
+            return NodoOperacionUnaria(operador, operando)
         
         if token_actual[0] == "NUMBER":
             token = self.coincidir("NUMBER")

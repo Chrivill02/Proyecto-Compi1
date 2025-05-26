@@ -132,6 +132,9 @@ class GeneradorEnsamblador:
             
         elif isinstance(nodo, NodoFor):
             self._gen_ciclo_for(nodo)
+            
+        elif isinstance(nodo, NodoScanf):
+            self._gen_scanf(nodo)
     
     def _gen_cabecera(self):
         self.data_section = [
@@ -139,6 +142,8 @@ class GeneradorEnsamblador:
             'fmt_str_d db "%d", 0',
             'fmt_str_s db "%s", 0', 
             'fmt_newline db 10, 0',
+            'fmt_scanf_int db "%d", 0',
+            'fmt_scanf_str db "%s", 0'
         ]
         
     def _gen_fin(self):
@@ -163,35 +168,41 @@ class GeneradorEnsamblador:
         
         self.codigo.append(f"global {func_name}")
         self.codigo.append(f"{func_name}:")
-        self.codigo.append("    push rbp") 
-        self.codigo.append("    mov rbp, rsp") 
+        self.codigo.append("    push rbp")
+        self.codigo.append("    mov rbp, rsp")
         
         self.local_vars = {}
-        self.stack_offset = 8  # Comenzar desde 8 para evitar [rbp - 0]
+        param_offset = 8  # Offset para parámetros (empezando desde [rbp+16])
         
         for i, param in enumerate(funcion.parametros):
             if i < 4:
-                self.local_vars[param.nombre] = self.stack_offset
-                self.stack_offset += 8
+                self.local_vars[param.nombre] = param_offset
+                param_offset += 8
             else:
-                self.local_vars[param.nombre] = self.stack_offset
-                self.stack_offset += 8
+                self.local_vars[param.nombre] = 16 + (i-4)*8  # [rbp+16], [rbp+24], etc.
         
-        if self.stack_offset < 16:
-            stack_space = 16
-        else:
-            stack_space = ((self.stack_offset + 15) // 16) * 16
+        variables_locales = []
+        for instr in funcion.cuerpo:
+            if isinstance(instr, NodoAsignacion) and instr.tipo:
+                variables_locales.append(instr)
         
-        self.codigo.append(f"    sub rsp, {stack_space}")
+        local_var_offset = 8
+        for var in variables_locales:
+            self.local_vars[var.nombre] = local_var_offset
+            local_var_offset += 8
+        
+        total_space = ((local_var_offset - 1 + 15) // 16 * 16)
+        self.codigo.append(f"    sub rsp, {total_space}")
         
         for i, param in enumerate(funcion.parametros):
             if i < 4:
                 reg = ['rcx', 'rdx', 'r8', 'r9'][i]
                 self.codigo.append(f"    mov [rbp - {self.local_vars[param.nombre]}], {reg}")
-            else:
-                offset = 16 + (i-4)*8  
-                self.codigo.append(f"    mov rax, [rbp + {offset}]")
-                self.codigo.append(f"    mov [rbp - {self.local_vars[param.nombre]}], rax")
+        
+        for instr in funcion.cuerpo:
+            if isinstance(instr, NodoAsignacion) and instr.tipo:
+                self.generar(instr.expresion)
+                self.codigo.append(f"    mov [rbp - {self.local_vars[instr.nombre]}], rax")
             
     def _gen_funcion_epilogo(self):
         self.codigo.append("    mov rsp, rbp")
@@ -286,7 +297,28 @@ class GeneradorEnsamblador:
             self.generar(instr)
         
         self.codigo.append(f"{fin_label}:")
+    
+    def _gen_scanf(self, nodo):
+        formato = nodo.formato.strip('"')
+        fmt_id = f"scanf_fmt_{self.string_counter}"
+        self.string_literals[fmt_id] = formato
+        self.string_counter += 1
         
+        for var in nodo.variables:
+            var_name = var.nombre
+            if var_name not in self.local_vars:
+                self.local_vars[var_name] = self.stack_offset
+                self.stack_offset += 8
+                
+            var_offset = self.local_vars[var_name]
+            self.codigo.extend([
+                f"    lea rdx, [rbp - {var_offset}]",
+                f"    lea rcx, [{fmt_id}]",
+                "    sub rsp, 32",
+                "    call scanf",
+                "    add rsp, 32"
+            ])
+    
     def _gen_ciclo_while(self, nodo):
         inicio_label = self.nueva_etiqueta()
         condicion_label = self.nueva_etiqueta()
@@ -340,9 +372,17 @@ class GeneradorEnsamblador:
     def obtener_codigo(self):
         extern_section = [
             'section .text',
+            'default rel',
             'extern printf',
-            'extern ExitProcess',
-            'default rel'
+            'extern scanf',
+            'extern ExitProcess'
         ]
-        return '\n'.join(self.data_section + [''] + extern_section + [''] + self.codigo)
+    
+        return '\n'.join(
+            self.data_section + 
+            [''] + 
+            extern_section + 
+            [''] + 
+            self.codigo
+        )
     

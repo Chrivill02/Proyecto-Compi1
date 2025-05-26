@@ -120,6 +120,16 @@ class AnalizadorSemantico:
             raise Exception(f"Error semantico: Tipos incompatibles en la operacion '{nodo.operador}' ({tipo_izquierda} y {tipo_derecha})")
         return tipo_izquierda
     
+    def analizar_scanf(self, nodo_scanf):
+        for var in nodo_scanf.variables:
+            var_name = var.nombre
+            if var_name not in self.tabla_simbolos:
+                self.tabla_simbolos[var_name] = {
+                    'tipo': 'int', 
+                    'ambito': self.ambito_actual,
+                    'declarada_en': 'scanf'
+                }
+            
     def analizar_nodoRetorno(self, nodo):
         if not self.funcion_actual:
             raise Exception("Error semantico: 'return' fuera de la funcion")

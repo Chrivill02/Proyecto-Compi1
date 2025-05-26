@@ -1,4 +1,5 @@
 __pycache__/
-.exe
-.obj
-.asm
+salida.exe
+salida.obj
+salida.asm
+testmain.py
