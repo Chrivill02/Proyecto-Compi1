@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QGraphicsPolygonItem, QDockWidget, QListWidget, QVBoxLayout, QWidget,
     QLabel, QColorDialog, QMessageBox
 )
+
 from PyQt5.QtCore import Qt, QPointF, QLineF
 from PyQt5.QtGui import (
     QBrush, QPen, QColor, QPainterPath, QPainter, QPolygonF, QFont
