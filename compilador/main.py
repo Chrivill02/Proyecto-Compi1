@@ -451,10 +451,6 @@ class FlowchartEditor(QMainWindow):
             btn_copy.clicked.connect(lambda: QApplication.clipboard().setText(code_text))
             buttons_layout.addWidget(btn_copy)
             
-            btn_save = QPushButton("Guardar como...")
-            btn_save.clicked.connect(lambda: self.save_code_to_file(code_text))
-            buttons_layout.addWidget(btn_save)
-            
             btn_close = QPushButton("Ejecutar")
             btn_close.clicked.connect(dlg.accept)
             buttons_layout.addWidget(btn_close)
